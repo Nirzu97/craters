@@ -301,7 +301,7 @@ st.sidebar.markdown("<h2 style='margin-top:0px;'>Analyzer Panel</h2>", unsafe_al
 
 # 1. Image Selection
 st.sidebar.subheader("Image Input")
-source_type = st.sidebar.radio("Source Image:", ["Use Sample Image", "Upload any new image from Lunar images collected by telescopes : https://data.im-ldi.com/mds?MDS_SEARCH=%7B%22datasets%22%3A%5B%22luna_lroc_fi%22%2C%22luna_lroc_pds_nac_edrcdr%22%2C%22luna_lroc_pds_wac_edrcdr%22%2C%22luna_lroc_pds_rdr%22%5D%2C%22query%22%3A%7B%7D%2C%22map%22%3A%7B%7D%7D"])
+source_type = st.sidebar.radio("Source Image:", ["Use Sample Image", "Upload Custom Image"])
 
 sample_choice = 1
 uploaded_file = None
@@ -310,6 +310,10 @@ if source_type == "Use Sample Image":
     sample_choice = st.sidebar.selectbox("Select Sample:", [1, 2, 3, 4, 5], format_func=lambda x: f"Sample Lunar Region {x}")
 else:
     uploaded_file = st.sidebar.file_uploader("Upload Lunar Image (PNG, JPG, JPEG):", type=["png", "jpg", "jpeg"])
+    st.sidebar.markdown("""
+    🌐 **Telescope Data Source**:
+    Browse and download raw lunar images from the [LROC Database](https://data.im-ldi.com/mds?MDS_SEARCH=%7B%22datasets%22%3A%5B%22luna_lroc_fi%22%2C%22luna_lroc_pds_nac_edrcdr%22%2C%22luna_lroc_pds_wac_edrcdr%22%2C%22luna_lroc_pds_rdr%22%5D%2C%22query%22%3A%7B%7D%2C%22map%22%3A%7B%7D%7D) to test upload.
+    """)
 
 # 2. Main Parameters
 st.sidebar.subheader("Geological Calibration")
@@ -319,13 +323,13 @@ st.sidebar.subheader("YOLOv8 Detection Settings")
 conf_threshold = st.sidebar.slider("Confidence Threshold:", min_value=0.1, max_value=1.0, value=0.5, step=0.05)
 iou_threshold = st.sidebar.slider("NMS IoU Threshold:", min_value=0.1, max_value=1.0, value=0.5, step=0.05)
 
-st.sidebar.subheader("Sliding Window Settings")
-window_size = st.sidebar.number_input("Window Size (pixels):", min_value=128, max_value=2000, value=640, step=32)
-overlap = st.sidebar.slider("Overlap Fraction:", min_value=0.0, max_value=0.8, value=0.2, step=0.05)
-
 st.sidebar.subheader("Grid Hazard Settings")
 grid_n = st.sidebar.slider("Grid Dimension (N x N):", min_value=4, max_value=30, value=8, step=1)
 safety_threshold = st.sidebar.slider("Safety Cutoff Score:", min_value=0.1, max_value=0.9, value=0.3, step=0.05)
+
+# Hidden sliding window parameters (cleaner UI)
+window_size = 640
+overlap = 0.2
 
 # ---------------------------------------------------------
 # Core Loading & State Management
@@ -443,6 +447,30 @@ img_h, img_w = image_bgr.shape[:2]
 # ---------------------------------------------------------
 st.markdown("<h1 style='text-align: center; margin-bottom: 5px;'>🌙 Lunar Landing Site Safe Zone Analyzer</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.1rem; margin-bottom: 25px;'>Automated detection of lunar impact craters and geological safety mapping for space exploration landing profiles.</p>", unsafe_allow_html=True)
+
+with st.expander("📖 Learn more about the Geological Math & Detection Model"):
+    st.markdown("""
+    ### 🧠 Detection Model: YOLOv8
+    This application uses a custom-trained **YOLOv8 (You Only Look Once)** deep learning model optimized for crater detection on the lunar surface. 
+    The image is analyzed using a **sliding window search** (patch size: 640px, overlap: 20%) to detect craters of various sizes while preserving high-resolution geology.
+    
+    ---
+    
+    ### 📊 Geological Indices
+    
+    #### 1. Crater Density Index (CDI)
+    CDI measures the frequency of craters per unit area. High CDI indicates geologically older terrain that has undergone heavy impact bombardment, representing high hazardous rough surface terrain.
+    $$\\text{CDI} = \\frac{\\text{Number of Craters in Cell}}{\\text{Cell Area } (\\text{km}^2)}$$
+    
+    #### 2. Size-Weighted Hazard Index (SWHI)
+    Unlike CDI which treats all craters equally, SWHI weights each crater based on its size (logarithm of its diameter in kilometers). A single large crater poses a far greater catastrophic risk to a lander than multiple small secondary craters.
+    $$\\text{SWHI} = \\frac{\\sum \\ln(\\text{diameter}_{\\text{km}})}{\\text{Cell Area } (\\text{km}^2)}$$
+    
+    #### 3. Combined Safety Score
+    Both indices are normalized between $0$ (safest) and $1$ (most hazardous) and averaged:
+    $$\\text{Safety Score} = \\frac{\\text{CDI}_{\\text{normalized}} + \\text{SWHI}_{\\text{normalized}}}{2}$$
+    Any cell with a safety score at or below the **Safety Cutoff Score** is classified as a **Safe Landing Zone** (marked in green).
+    """)
 
 # ---------------------------------------------------------
 # Processing Pipeline Execution
