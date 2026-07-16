@@ -289,6 +289,13 @@ safety_threshold = st.sidebar.slider("Safety Cutoff Score:", min_value=0.1, max_
 # Load model
 WEIGHTS_PATH = os.path.join(os.path.dirname(__file__), "best.pt")
 
+# If the file exists but is under 1MB, it is a corrupted HTML download. Delete it.
+if os.path.exists(WEIGHTS_PATH) and os.path.getsize(WEIGHTS_PATH) < 1000000:
+    try:
+        os.remove(WEIGHTS_PATH)
+    except Exception:
+        pass
+
 if not os.path.exists(WEIGHTS_PATH):
     # Check if a Google Drive File ID is configured in Secrets
     gdrive_id = None
