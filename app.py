@@ -9,29 +9,12 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import os
 import time
-import requests
+import gdown
 
 def download_file_from_google_drive(file_id, destination):
-    """Downloads a large file from Google Drive handling confirmation page warnings."""
-    URL = "https://docs.google.com/uc?export=download&confirm=t"
-    session = requests.Session()
-    response = session.get(URL, params={'id': file_id}, stream=True)
-    
-    token = None
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            token = value
-            break
-            
-    if token:
-        params = {'id': file_id, 'confirm': token}
-        response = session.get(URL, params=params, stream=True)
-        
-    CHUNK_SIZE = 32768
-    with open(destination, "wb") as f:
-        for chunk in response.iter_content(CHUNK_SIZE):
-            if chunk:
-                f.write(chunk)
+    """Downloads a large file from Google Drive using gdown."""
+    url = f"https://drive.google.com/uc?id={file_id}"
+    gdown.download(url, destination, quiet=False)
 
 # ---------------------------------------------------------
 # Page Configuration & Aesthetics Setup
