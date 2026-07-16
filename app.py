@@ -27,6 +27,8 @@ def clean_gdrive_source(source):
                 pass
     return source
 
+import re
+
 def download_file_from_google_drive(file_id_or_url, destination):
     """Downloads a file from Google Drive using its File ID or direct URL, bypassing the warning warning screen."""
     file_id = clean_gdrive_source(file_id_or_url)
@@ -38,17 +40,19 @@ def download_file_from_google_drive(file_id_or_url, destination):
     session = requests.Session()
     response = session.get(url, stream=True)
 
-    # Handle Google Drive's large file warning page if it appears
-    token = None
-    for key, value in response.cookies.items():
-        if "download_warning" in key:
-            token = value
-            break
-
-    if token:
-        # Append the confirmation token to bypass the HTML warning page
-        confirm_url = f"{url}&confirm={token}"
-        response = session.get(confirm_url, stream=True)
+    content_type = response.headers.get('Content-Type', '')
+    if 'text/html' in content_type:
+        # It is HTML warning page, read full text to extract confirm params
+        html = response.text
+        
+        # Parse confirmation hidden parameters
+        pattern = re.compile(r'<input\s+type="hidden"\s+name="([^"]+)"\s+value="([^"]+)"')
+        params = {name: val for name, val in pattern.findall(html)}
+        
+        if params:
+            # Request the direct download from usercontent using the extracted parameters
+            download_url = "https://drive.usercontent.google.com/download"
+            response = session.get(download_url, params=params, stream=True)
 
     # Save the binary stream to disk
     with open(destination, "wb") as f:
