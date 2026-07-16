@@ -11,12 +11,26 @@ import os
 import time
 import requests
 
+def clean_gdrive_source(source):
+    """Extracts the Google Drive File ID from a URL or returns it if it is already an ID."""
+    source = source.strip()
+    if "drive.google.com" in source:
+        if "/d/" in source:
+            try:
+                return source.split("/d/")[1].split("/")[0]
+            except Exception:
+                pass
+        elif "id=" in source:
+            try:
+                return source.split("id=")[1].split("&")[0]
+            except Exception:
+                pass
+    return source
+
 def download_file_from_google_drive(file_id_or_url, destination):
     """Downloads a file from Google Drive using its File ID or direct URL, bypassing the warning warning screen."""
-    if file_id_or_url.startswith("http://") or file_id_or_url.startswith("https://"):
-        url = file_id_or_url
-    else:
-        url = f"https://drive.google.com/uc?export=download&id={file_id_or_url}"
+    file_id = clean_gdrive_source(file_id_or_url)
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
 
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(destination), exist_ok=True)
@@ -335,6 +349,13 @@ if not os.path.exists(WEIGHTS_PATH):
         with st.spinner("Downloading YOLOv8 weights from Google Drive... (89 MB)"):
             try:
                 download_file_from_google_drive(gdrive_source, WEIGHTS_PATH)
+                if os.path.exists(WEIGHTS_PATH) and os.path.getsize(WEIGHTS_PATH) < 1000000:
+                    st.error("⚠️ Automatically downloaded weights file is too small (less than 1MB). This happens when the Google Drive File ID is invalid or the file is not shared publicly ('Anyone with the link can view').")
+                    try:
+                        os.remove(WEIGHTS_PATH)
+                    except Exception:
+                        pass
+                    st.stop()
                 st.rerun()
             except Exception as e:
                 st.error(f"Failed to automatically download weights from Google Drive: {e}")
@@ -356,8 +377,15 @@ if not os.path.exists(WEIGHTS_PATH):
                 with st.spinner("Downloading YOLOv8 weights from Google Drive... (89 MB)"):
                     try:
                         download_file_from_google_drive(clean_input, WEIGHTS_PATH)
-                        st.sidebar.success("Model downloaded successfully! Reloading...")
-                        st.rerun()
+                        if os.path.exists(WEIGHTS_PATH) and os.path.getsize(WEIGHTS_PATH) < 1000000:
+                            st.sidebar.error("⚠️ Downloaded file is too small (less than 1MB). Please verify that the Google Drive link is set to 'Anyone with the link can view'.")
+                            try:
+                                os.remove(WEIGHTS_PATH)
+                            except Exception:
+                                pass
+                        else:
+                            st.sidebar.success("Model downloaded successfully! Reloading...")
+                            st.rerun()
                     except Exception as e:
                         st.sidebar.error(f"Download failed: {e}")
         st.sidebar.info("💡 Tip: To download automatically on deployment, add GDRIVE_FILE_ID or GDRIVE_MODEL_URL to your Streamlit App Secrets.")
