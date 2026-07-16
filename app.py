@@ -9,12 +9,38 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import os
 import time
-import gdown
+import requests
 
-def download_file_from_google_drive(file_id, destination):
-    """Downloads a large file from Google Drive using gdown."""
-    url = f"https://drive.google.com/uc?id={file_id}"
-    gdown.download(url, destination, quiet=False)
+def download_file_from_google_drive(file_id_or_url, destination):
+    """Downloads a file from Google Drive using its File ID or direct URL, bypassing the warning warning screen."""
+    if file_id_or_url.startswith("http://") or file_id_or_url.startswith("https://"):
+        url = file_id_or_url
+    else:
+        url = f"https://drive.google.com/uc?export=download&id={file_id_or_url}"
+
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+
+    session = requests.Session()
+    response = session.get(url, stream=True)
+
+    # Handle Google Drive's large file warning page if it appears
+    token = None
+    for key, value in response.cookies.items():
+        if "download_warning" in key:
+            token = value
+            break
+
+    if token:
+        # Append the confirmation token to bypass the HTML warning page
+        confirm_url = f"{url}&confirm={token}"
+        response = session.get(confirm_url, stream=True)
+
+    # Save the binary stream to disk
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(chunk_size=32768):
+            if chunk:
+                f.write(chunk)
 
 # ---------------------------------------------------------
 # Page Configuration & Aesthetics Setup
@@ -297,38 +323,45 @@ if os.path.exists(WEIGHTS_PATH) and os.path.getsize(WEIGHTS_PATH) < 1000000:
         pass
 
 if not os.path.exists(WEIGHTS_PATH):
-    # Check if a Google Drive File ID is configured in Secrets
-    gdrive_id = None
+    # Check if Google Drive ID or URL is configured in Secrets
+    gdrive_source = None
     try:
-        gdrive_id = st.secrets.get("GDRIVE_FILE_ID", None)
+        gdrive_source = st.secrets.get("GDRIVE_MODEL_URL", None) or st.secrets.get("GDRIVE_FILE_ID", None)
     except Exception:
         pass
 
-    if gdrive_id:
+    if gdrive_source:
         # Download automatically in the background
         with st.spinner("Downloading YOLOv8 weights from Google Drive... (89 MB)"):
             try:
-                download_file_from_google_drive(gdrive_id, WEIGHTS_PATH)
+                download_file_from_google_drive(gdrive_source, WEIGHTS_PATH)
                 st.rerun()
             except Exception as e:
                 st.error(f"Failed to automatically download weights from Google Drive: {e}")
                 st.stop()
     else:
         st.sidebar.warning("⚠️ Model weights file 'best.pt' not found locally.")
-        gdrive_id_input = st.sidebar.text_input("Paste Google Drive File ID for best.pt:")
+        gdrive_input = st.sidebar.text_input("Paste Google Drive File ID or Shareable URL for best.pt:")
         if st.sidebar.button("Download Model from Google Drive"):
-            if not gdrive_id_input:
-                st.sidebar.error("Please enter a valid Google Drive File ID.")
+            if not gdrive_input:
+                st.sidebar.error("Please enter a valid Google Drive File ID or URL.")
             else:
+                clean_input = gdrive_input.strip()
+                if "drive.google.com" in clean_input and "/d/" in clean_input:
+                    try:
+                        clean_input = clean_input.split("/d/")[1].split("/")[0]
+                    except Exception:
+                        pass
+                
                 with st.spinner("Downloading YOLOv8 weights from Google Drive... (89 MB)"):
                     try:
-                        download_file_from_google_drive(gdrive_id_input, WEIGHTS_PATH)
+                        download_file_from_google_drive(clean_input, WEIGHTS_PATH)
                         st.sidebar.success("Model downloaded successfully! Reloading...")
                         st.rerun()
                     except Exception as e:
                         st.sidebar.error(f"Download failed: {e}")
-        st.sidebar.info("💡 Tip: To download automatically on deployment, add GDRIVE_FILE_ID to your Streamlit App Secrets.")
-        st.info("👈 Please enter your Google Drive File ID for `best.pt` in the sidebar to download and load the model.")
+        st.sidebar.info("💡 Tip: To download automatically on deployment, add GDRIVE_FILE_ID or GDRIVE_MODEL_URL to your Streamlit App Secrets.")
+        st.info("👈 Please enter your Google Drive File ID or shareable link for `best.pt` in the sidebar to download and load the model.")
         st.stop()
 
 model = load_yolo_model(WEIGHTS_PATH)
