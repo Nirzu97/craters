@@ -3,6 +3,7 @@ ultralytics
 torch
 torchvision
 opencv-python-headless
+opencv-python
 pandas
 matplotlib
 numpy
